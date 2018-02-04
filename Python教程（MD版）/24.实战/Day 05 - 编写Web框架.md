@@ -6,58 +6,52 @@
 
 第一步，编写一个用`@asyncio.coroutine`装饰的函数：
 
-
-
-    @asyncio.coroutine
-    def handle_url_xxx(request):
-        pass
-
+```python
+@asyncio.coroutine
+def handle_url_xxx(request):
+    pass
+```
 
 第二步，传入的参数需要自己从`request`中获取：
 
-
-
-    url_param = request.match_info['key']
-    query_params = parse_qs(request.query_string)
-
+```python
+url_param = request.match_info['key']
+query_params = parse_qs(request.query_string)
+```
 
 最后，需要自己构造`Response`对象：
 
-
-
-    text = render('template', data)
-    return web.Response(text.encode('utf-8'))
-
+```python
+text = render('template', data)
+return web.Response(text.encode('utf-8'))
+```
 
 这些重复的工作可以由框架完成。例如，处理带参数的URL`/blog/{id}`可以这么写：
 
-
-
-    @get('/blog/{id}')
-    def get_blog(id):
-        pass
-
+```python
+@get('/blog/{id}')
+def get_blog(id):
+    pass
+```
 
 处理`query_string`参数可以通过关键字参数`**kw`或者命名关键字参数接收：
 
-
-
-    @get('/api/comments')
-    def api_comments(*, page='1'):
-        pass
-
+```python
+@get('/api/comments')
+def api_comments(*, page='1'):
+    pass
+```
 
 对于函数的返回值，不一定是`web.Response`对象，可以是`str`、`bytes`或`dict`。
 
 如果希望渲染模板，我们可以这么返回一个`dict`：
 
-
-
-    return {
-        '__template__': 'index.html',
-        'data': '...'
-    }
-
+```python
+return {
+    '__template__': 'index.html',
+    'data': '...'
+}
+```
 
 因此，Web框架的设计是完全从使用者出发，目的是让使用者编写尽可能少的代码。
 
@@ -67,21 +61,20 @@
 
 要把一个函数映射为一个URL处理函数，我们先定义`@get()`：
 
-
-
-    def get(path):
-        '''
-        Define decorator @get('/path')
-        '''
-        def decorator(func):
-            @functools.wraps(func)
-            def wrapper(*args, **kw):
-                return func(*args, **kw)
-            wrapper.__method__ = 'GET'
-            wrapper.__route__ = path
-            return wrapper
-        return decorator
-
+```python
+def get(path):
+    '''
+    Define decorator @get('/path')
+    '''
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kw):
+            return func(*args, **kw)
+        wrapper.__method__ = 'GET'
+        wrapper.__route__ = path
+        return wrapper
+    return decorator
+```
 
 这样，一个函数通过`@get()`的装饰就附带了URL信息。
 
@@ -93,91 +86,84 @@ URL处理函数不一定是一个`coroutine`，因此我们用`RequestHandler()`
 
 `RequestHandler`是一个类，由于定义了`__call__()`方法，因此可以将其实例视为函数。
 
-`RequestHandler`目的就是从URL函数中分析其需要接收的参数，从`request`中获取必要的参数，调用URL函数，然后把结果转换为`web.
-Response`对象，这样，就完全符合`aiohttp`框架的要求：
+`RequestHandler`目的就是从URL函数中分析其需要接收的参数，从`request`中获取必要的参数，调用URL函数，然后把结果转换为`web.Response`对象，这样，就完全符合`aiohttp`框架的要求：
 
+```python
+class RequestHandler(object):
 
+    def __init__(self, app, fn):
+        self._app = app
+        self._func = fn
+        ...
 
-    class RequestHandler(object):
-
-        def __init__(self, app, fn):
-            self._app = app
-            self._func = fn
-            ...
-
-        @asyncio.coroutine
-        def __call__(self, request):
-            kw = ... 获取参数
-            r = yield from self._func(**kw)
-            return r
-
+    @asyncio.coroutine
+    def __call__(self, request):
+        kw = ... 获取参数
+        r = yield from self._func(**kw)
+        return r
+```
 
 再编写一个`add_route`函数，用来注册一个URL处理函数：
 
-
-
-    def add_route(app, fn):
-        method = getattr(fn, '__method__', None)
-        path = getattr(fn, '__route__', None)
-        if path is None or method is None:
-            raise ValueError('@get or @post not defined in %s.' % str(fn))
-        if not asyncio.iscoroutinefunction(fn) and not inspect.isgeneratorfunction(fn):
-            fn = asyncio.coroutine(fn)
-        logging.info('add route %s %s => %s(%s)' % (method, path, fn.__name__, ', '.join(inspect.signature(fn).parameters.keys())))
-        app.router.add_route(method, path, RequestHandler(app, fn))
-
+```python
+def add_route(app, fn):
+    method = getattr(fn, '__method__', None)
+    path = getattr(fn, '__route__', None)
+    if path is None or method is None:
+        raise ValueError('@get or @post not defined in %s.' % str(fn))
+    if not asyncio.iscoroutinefunction(fn) and not inspect.isgeneratorfunction(fn):
+        fn = asyncio.coroutine(fn)
+    logging.info('add route %s %s => %s(%s)' % (method, path, fn.__name__, ', '.join(inspect.signature(fn).parameters.keys())))
+    app.router.add_route(method, path, RequestHandler(app, fn))
+```
 
 最后一步，把很多次`add_route()`注册的调用：
 
-
-
-    add_route(app, handles.index)
-    add_route(app, handles.blog)
-    add_route(app, handles.create_comment)
-    ...
-
+```python
+add_route(app, handles.index)
+add_route(app, handles.blog)
+add_route(app, handles.create_comment)
+...
+```
 
 变成自动扫描：
 
-
-
-    # 自动把handler模块的所有符合条件的函数注册了:
-    add_routes(app, 'handlers')
-
+```python
+# 自动把handler模块的所有符合条件的函数注册了:
+add_routes(app, 'handlers')
+```
 
 `add_routes()`定义如下：
 
-
-
-    def add_routes(app, module_name):
-        n = module_name.rfind('.')
-        if n == (-1):
-            mod = __import__(module_name, globals(), locals())
-        else:
-            name = module_name[n+1:]
-            mod = getattr(__import__(module_name[:n], globals(), locals(), [name]), name)
-        for attr in dir(mod):
-            if attr.startswith('_'):
-                continue
-            fn = getattr(mod, attr)
-            if callable(fn):
-                method = getattr(fn, '__method__', None)
-                path = getattr(fn, '__route__', None)
-                if method and path:
-                    add_route(app, fn)
-
+```python
+def add_routes(app, module_name):
+    n = module_name.rfind('.')
+    if n == (-1):
+        mod = __import__(module_name, globals(), locals())
+    else:
+        name = module_name[n+1:]
+        mod = getattr(__import__(module_name[:n], globals(), locals(), [name]), name)
+    for attr in dir(mod):
+        if attr.startswith('_'):
+            continue
+        fn = getattr(mod, attr)
+        if callable(fn):
+            method = getattr(fn, '__method__', None)
+            path = getattr(fn, '__route__', None)
+            if method and path:
+                add_route(app, fn)
+```
 
 最后，在`app.py`中加入`middleware`、`jinja2`模板和自注册的支持：
 
-
-
-    app = web.Application(loop=loop, middlewares=[
-        logger_factory, response_factory
-    ])
-    init_jinja2(app, filters=dict(datetime=datetime_filter))
-    add_routes(app, 'handlers')
-    add_static(app)
-
+```python
+app = web.Application(loop=loop, middlewares=[
+    logger_factory, response_factory
+])
+init_jinja2(app, filters=dict(datetime=datetime_filter))
+add_routes(app, 'handlers')
+add_static(app)
+```
 
 ### middleware
 
@@ -186,42 +172,40 @@ Response`对象，这样，就完全符合`aiohttp`框架的要求：
 一个`middleware`可以改变URL的输入、输出，甚至可以决定不继续处理而直接返回。middleware的用处就在于把通用的功能从每个URL处理函数中
 拿出来，集中放到一个地方。例如，一个记录URL日志的`logger`可以简单定义如下：
 
-
-
+```python
+@asyncio.coroutine
+def logger_factory(app, handler):
     @asyncio.coroutine
-    def logger_factory(app, handler):
-        @asyncio.coroutine
-        def logger(request):
-            # 记录日志:
-            logging.info('Request: %s %s' % (request.method, request.path))
-            # 继续处理请求:
-            return (yield from handler(request))
-        return logger
-
+    def logger(request):
+        # 记录日志:
+        logging.info('Request: %s %s' % (request.method, request.path))
+        # 继续处理请求:
+        return (yield from handler(request))
+    return logger
+```
 
 而`response`这个`middleware`把返回值转换为`web.Response`对象再返回，以保证满足`aiohttp`的要求：
 
-
-
+```python
+@asyncio.coroutine
+def response_factory(app, handler):
     @asyncio.coroutine
-    def response_factory(app, handler):
-        @asyncio.coroutine
-        def response(request):
-            # 结果:
-            r = yield from handler(request)
-            if isinstance(r, web.StreamResponse):
-                return r
-            if isinstance(r, bytes):
-                resp = web.Response(body=r)
-                resp.content_type = 'application/octet-stream'
-                return resp
-            if isinstance(r, str):
-                resp = web.Response(body=r.encode('utf-8'))
-                resp.content_type = 'text/html;charset=utf-8'
-                return resp
-            if isinstance(r, dict):
-                ...
-
+    def response(request):
+        # 结果:
+        r = yield from handler(request)
+        if isinstance(r, web.StreamResponse):
+            return r
+        if isinstance(r, bytes):
+            resp = web.Response(body=r)
+            resp.content_type = 'application/octet-stream'
+            return resp
+        if isinstance(r, str):
+            resp = web.Response(body=r.encode('utf-8'))
+            resp.content_type = 'text/html;charset=utf-8'
+            return resp
+        if isinstance(r, dict):
+            ...
+```
 
 有了这些基础设施，我们就可以专注地往`handlers`模块不断添加URL处理函数了，可以极大地提高开发效率。
 

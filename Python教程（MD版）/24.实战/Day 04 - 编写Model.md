@@ -1,48 +1,47 @@
 有了ORM，我们就可以把Web App需要的3个表用`Model`表示出来：
 
+```python
+import time, uuid
 
+from orm import Model, StringField, BooleanField, FloatField, TextField
 
-    import time, uuid
+def next_id():
+    return '%015d%s000' % (int(time.time() * 1000), uuid.uuid4().hex)
 
-    from orm import Model, StringField, BooleanField, FloatField, TextField
+class User(Model):
+    __table__ = 'users'
 
-    def next_id():
-        return '%015d%s000' % (int(time.time() * 1000), uuid.uuid4().hex)
+    id = StringField(primary_key=True, default=next_id, ddl='varchar(50)')
+    email = StringField(ddl='varchar(50)')
+    passwd = StringField(ddl='varchar(50)')
+    admin = BooleanField()
+    name = StringField(ddl='varchar(50)')
+    image = StringField(ddl='varchar(500)')
+    created_at = FloatField(default=time.time)
 
-    class User(Model):
-        __table__ = 'users'
+class Blog(Model):
+    __table__ = 'blogs'
 
-        id = StringField(primary_key=True, default=next_id, ddl='varchar(50)')
-        email = StringField(ddl='varchar(50)')
-        passwd = StringField(ddl='varchar(50)')
-        admin = BooleanField()
-        name = StringField(ddl='varchar(50)')
-        image = StringField(ddl='varchar(500)')
-        created_at = FloatField(default=time.time)
+    id = StringField(primary_key=True, default=next_id, ddl='varchar(50)')
+    user_id = StringField(ddl='varchar(50)')
+    user_name = StringField(ddl='varchar(50)')
+    user_image = StringField(ddl='varchar(500)')
+    name = StringField(ddl='varchar(50)')
+    summary = StringField(ddl='varchar(200)')
+    content = TextField()
+    created_at = FloatField(default=time.time)
 
-    class Blog(Model):
-        __table__ = 'blogs'
+class Comment(Model):
+    __table__ = 'comments'
 
-        id = StringField(primary_key=True, default=next_id, ddl='varchar(50)')
-        user_id = StringField(ddl='varchar(50)')
-        user_name = StringField(ddl='varchar(50)')
-        user_image = StringField(ddl='varchar(500)')
-        name = StringField(ddl='varchar(50)')
-        summary = StringField(ddl='varchar(200)')
-        content = TextField()
-        created_at = FloatField(default=time.time)
-
-    class Comment(Model):
-        __table__ = 'comments'
-
-        id = StringField(primary_key=True, default=next_id, ddl='varchar(50)')
-        blog_id = StringField(ddl='varchar(50)')
-        user_id = StringField(ddl='varchar(50)')
-        user_name = StringField(ddl='varchar(50)')
-        user_image = StringField(ddl='varchar(500)')
-        content = TextField()
-        created_at = FloatField(default=time.time)
-
+    id = StringField(primary_key=True, default=next_id, ddl='varchar(50)')
+    blog_id = StringField(ddl='varchar(50)')
+    user_id = StringField(ddl='varchar(50)')
+    user_name = StringField(ddl='varchar(50)')
+    user_image = StringField(ddl='varchar(500)')
+    content = TextField()
+    created_at = FloatField(default=time.time)
+```
 
 在编写ORM时，给一个Field增加一个`default`参数可以让ORM自己填入缺省值，非常方便。并且，缺省值可以作为函数对象传入，在调用`save()`
 时自动计算。
@@ -56,65 +55,63 @@
 
 如果表的数量很少，可以手写创建表的SQL脚本：
 
+```sql
+-- schema.sql
 
+drop database if exists awesome;
 
-    -- schema.sql
+create database awesome;
 
-    drop database if exists awesome;
+use awesome;
 
-    create database awesome;
+grant select, insert, update, delete on awesome.* to 'www-data'@'localhost' identified by 'www-data';
 
-    use awesome;
+create table users (
+    `id` varchar(50) not null,
+    `email` varchar(50) not null,
+    `passwd` varchar(50) not null,
+    `admin` bool not null,
+    `name` varchar(50) not null,
+    `image` varchar(500) not null,
+    `created_at` real not null,
+    unique key `idx_email` (`email`),
+    key `idx_created_at` (`created_at`),
+    primary key (`id`)
+) engine=innodb default charset=utf8;
 
-    grant select, insert, update, delete on awesome.* to 'www-data'@'localhost' identified by 'www-data';
+create table blogs (
+    `id` varchar(50) not null,
+    `user_id` varchar(50) not null,
+    `user_name` varchar(50) not null,
+    `user_image` varchar(500) not null,
+    `name` varchar(50) not null,
+    `summary` varchar(200) not null,
+    `content` mediumtext not null,
+    `created_at` real not null,
+    key `idx_created_at` (`created_at`),
+    primary key (`id`)
+) engine=innodb default charset=utf8;
 
-    create table users (
-        `id` varchar(50) not null,
-        `email` varchar(50) not null,
-        `passwd` varchar(50) not null,
-        `admin` bool not null,
-        `name` varchar(50) not null,
-        `image` varchar(500) not null,
-        `created_at` real not null,
-        unique key `idx_email` (`email`),
-        key `idx_created_at` (`created_at`),
-        primary key (`id`)
-    ) engine=innodb default charset=utf8;
-
-    create table blogs (
-        `id` varchar(50) not null,
-        `user_id` varchar(50) not null,
-        `user_name` varchar(50) not null,
-        `user_image` varchar(500) not null,
-        `name` varchar(50) not null,
-        `summary` varchar(200) not null,
-        `content` mediumtext not null,
-        `created_at` real not null,
-        key `idx_created_at` (`created_at`),
-        primary key (`id`)
-    ) engine=innodb default charset=utf8;
-
-    create table comments (
-        `id` varchar(50) not null,
-        `blog_id` varchar(50) not null,
-        `user_id` varchar(50) not null,
-        `user_name` varchar(50) not null,
-        `user_image` varchar(500) not null,
-        `content` mediumtext not null,
-        `created_at` real not null,
-        key `idx_created_at` (`created_at`),
-        primary key (`id`)
-    ) engine=innodb default charset=utf8;
-
+create table comments (
+    `id` varchar(50) not null,
+    `blog_id` varchar(50) not null,
+    `user_id` varchar(50) not null,
+    `user_name` varchar(50) not null,
+    `user_image` varchar(500) not null,
+    `content` mediumtext not null,
+    `created_at` real not null,
+    key `idx_created_at` (`created_at`),
+    primary key (`id`)
+) engine=innodb default charset=utf8;
+```
 
 如果表的数量很多，可以从`Model`对象直接通过脚本自动生成SQL脚本，使用更简单。
 
 把SQL脚本放到MySQL命令行里执行：
 
-
-
-    $ mysql -u root -p < schema.sql
-
+```
+$ mysql -u root -p < schema.sql
+```
 
 我们就完成了数据库表的初始化。
 
@@ -122,21 +119,20 @@
 
 接下来，就可以真正开始编写代码操作对象了。比如，对于`User`对象，我们就可以做如下操作：
 
+```python
+import orm
+from models import User, Blog, Comment
 
+def test():
+    yield from orm.create_pool(user='www-data', password='www-data', database='awesome')
 
-    import orm
-    from models import User, Blog, Comment
+    u = User(name='Test', email='test@example.com', passwd='1234567890', image='about:blank')
 
-    def test():
-        yield from orm.create_pool(user='www-data', password='www-data', database='awesome')
+    yield from u.save()
 
-        u = User(name='Test', email='test@example.com', passwd='1234567890', image='about:blank')
-
-        yield from u.save()
-
-    for x in test():
-        pass
-
+for x in test():
+    pass
+```
 
 可以在MySQL客户端命令行查询，看看数据是不是正常存储到MySQL里面了。
 
