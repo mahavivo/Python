@@ -17,7 +17,6 @@ Web App里面有很多地方都要访问数据库。访问数据库需要创建�
 连接池由全局变量`__pool`存储，缺省情况下将编码设置为`utf8`，自动提交事务：
 
 ```python
-
 @asyncio.coroutine
 def create_pool(loop, **kw):
     logging.info('create database connection pool...')
